@@ -24,6 +24,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "fx_api.h"
+#include "ux_hcd_stm32.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -55,6 +56,8 @@ volatile uint32_t dev_connected=0;
 FX_MEDIA *media;
 UX_HOST_CLASS_STORAGE *storage;
 UX_HOST_CLASS_STORAGE_MEDIA *storage_media;
+
+extern HCD_HandleTypeDef hhcd_USB_DRD_FS;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -109,7 +112,10 @@ UINT MX_USBX_Host_Init(VOID)
   }
 
   /* USER CODE BEGIN MX_USBX_Host_Init1 */
-
+  /* Register all the USB host controllers available in this system. */
+  ux_host_stack_hcd_register(_ux_system_host_hcd_stm32_name, _ux_hcd_stm32_initialize, (ULONG)USB_DRD_FS, (ULONG)&hhcd_USB_DRD_FS);
+  /* Start USB Host */
+  HAL_HCD_Start(&hhcd_USB_DRD_FS); 
   /* USER CODE END MX_USBX_Host_Init1 */
 
   return ret;
@@ -202,7 +208,11 @@ UINT ux_host_event_callback(ULONG event, UX_HOST_CLASS *current_class, VOID *cur
 
       /* USER CODE END UX_DEVICE_REMOVAL */
 
-     /* USER CODE BEGIN UX_DEVICE_CONNECTION */
+      break;
+
+    case UX_DEVICE_CONNECTION:
+
+      /* USER CODE BEGIN UX_DEVICE_CONNECTION */
       dev_connected=1;
       /* USER CODE END UX_DEVICE_CONNECTION */
 
