@@ -15,7 +15,7 @@
 /**                                                                       */ 
 /** USBX Component                                                        */ 
 /**                                                                       */
-/**   HUB Class                                                           */
+/**   Storage Class                                                       */
 /**                                                                       */
 /**************************************************************************/
 /**************************************************************************/
@@ -26,7 +26,7 @@
 #define UX_SOURCE_CODE
 
 #include "ux_api.h"
-#include "ux_host_class_hub.h"
+#include "ux_host_class_storage.h"
 #include "ux_host_stack.h"
 
 
@@ -34,37 +34,33 @@
 /*                                                                        */ 
 /*  FUNCTION                                               RELEASE        */ 
 /*                                                                        */ 
-/*    _ux_host_class_hub_change_detect                    PORTABLE C      */ 
-/*                                                           6.1.12       */
+/*    _ux_host_class_storage_sense_code_translate         PORTABLE C      */ 
+/*                                                           6.1          */
 /*  AUTHOR                                                                */
 /*                                                                        */
 /*    Chaoqiong Xiao, Microsoft Corporation                               */
 /*                                                                        */
 /*  DESCRIPTION                                                           */
 /*                                                                        */ 
-/*    This function is called by the enumeration thread when there has    */ 
-/*    been activity on the HUB.                                           */ 
-/*                                                                        */
-/*    In standalone mode there is nothing to do here, activities are      */
-/*    processed in hub tasks function.                                    */
+/*    This function will perform a conversion between the SCSI error      */ 
+/*    codes and error codes expected by FileX.                            */ 
 /*                                                                        */ 
 /*  INPUT                                                                 */ 
 /*                                                                        */ 
-/*    None                                                                */ 
+/*    storage                               Pointer to storage class      */ 
+/*    status                                Status to convert             */ 
 /*                                                                        */ 
 /*  OUTPUT                                                                */ 
 /*                                                                        */ 
-/*    None                                                                */ 
+/*    Converted Status                                                    */ 
 /*                                                                        */ 
 /*  CALLS                                                                 */ 
 /*                                                                        */ 
-/*    _ux_host_class_hub_change_process     Process HUB change            */ 
-/*    _ux_host_stack_class_get              Get class                     */ 
-/*    _ux_host_stack_class_instance_get     Get class instance            */ 
+/*    None                                                                */ 
 /*                                                                        */ 
 /*  CALLED BY                                                             */ 
 /*                                                                        */ 
-/*    HUB Class                                                           */ 
+/*    Storage Class                                                       */ 
 /*                                                                        */ 
 /*  RELEASE HISTORY                                                       */ 
 /*                                                                        */ 
@@ -73,58 +69,14 @@
 /*  05-19-2020     Chaoqiong Xiao           Initial Version 6.0           */
 /*  09-30-2020     Chaoqiong Xiao           Modified comment(s),          */
 /*                                            resulting in version 6.1    */
-/*  07-29-2022     Chaoqiong Xiao           Modified comment(s),          */
-/*                                            added standalone support,   */
-/*                                            resulting in version 6.1.12 */
 /*                                                                        */
 /**************************************************************************/
-VOID  _ux_host_class_hub_change_detect(VOID)
+UINT  _ux_host_class_storage_sense_code_translate(UX_HOST_CLASS_STORAGE *storage, UINT status)
 {
-#if defined(UX_HOST_STANDALONE)
 
-    /* Things are done in hub task nothing to do here.  */
-#else
+    UX_PARAMETER_NOT_USED(storage);
 
-UX_HOST_CLASS           *class;
-UX_HOST_CLASS_HUB       *hub;
-UINT                    status;
-UINT                    class_index;
-
-    /* Get the class container first.  */
-    _ux_host_stack_class_get(_ux_system_host_class_hub_name, &class);
-
-    /* We start with the first index of the class instance.  */
-    class_index =  0;
-
-    /* We have found the class, now parse the instances.  */
-    do
-    {
-
-        /* Get class instance.  */
-        status =  _ux_host_stack_class_instance_get(class, class_index++, (VOID **) &hub);
-
-        /* Check completion status.  */
-        if (status == UX_SUCCESS)
-        {
-
-            /* We have found an instance of a HUB, check if it is live and if the HUB has 
-               detected a change before we proceed.  */
-            if (hub -> ux_host_class_hub_change_semaphore != 0)
-            {
-
-                /* If trace is enabled, insert this event into the trace buffer.  */
-                UX_TRACE_IN_LINE_INSERT(UX_TRACE_HOST_CLASS_HUB_CHANGE_DETECT, hub, 0, 0, 0, UX_TRACE_HOST_CLASS_EVENTS, 0, 0)
-
-                /* Call the HUB function that will diagnose the origin of the change.  */
-                _ux_host_class_hub_change_process(hub);
-
-                /* Decrement the HUB instance semaphore change so we don't get awaken again.  */
-                hub -> ux_host_class_hub_change_semaphore--;
-            }
-        }
-    } while (status == UX_SUCCESS);    
-
-    /* We have parsed all the HUB instances.  */
-    return;
-#endif
+    /* Return status.  */
+    return(status);
 }
+

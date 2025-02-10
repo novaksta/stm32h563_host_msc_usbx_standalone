@@ -1,12 +1,11 @@
-
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
-  * @file    app_filex.h
+  * @file    ux_host_msc.h
   * @author  MCD Application Team
-  * @brief   FileX applicative header file
+  * @brief   USBX Host MSC applicative header file
   ******************************************************************************
-  * @attention
+    * @attention
   *
   * Copyright (c) 2025 STMicroelectronics.
   * All rights reserved.
@@ -19,16 +18,17 @@
   */
 /* USER CODE END Header */
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __APP_FILEX_H__
-#define __APP_FILEX_H__
+#ifndef __UX_HOST_MSC_H__
+#define __UX_HOST_MSC_H__
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "fx_api.h"
-#include "fx_stm32_custom_driver.h"
+#include "ux_api.h"
+#include "ux_host_class_storage.h"
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -50,14 +50,12 @@ extern "C" {
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
-UINT MX_FileX_Init(void);
 
 /* USER CODE BEGIN EFP */
 
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-
 /* USER CODE BEGIN PD */
 
 /* USER CODE END PD */
@@ -65,7 +63,8 @@ UINT MX_FileX_Init(void);
 /* USER CODE BEGIN 1 */
 
 /* USER CODE END 1 */
+
 #ifdef __cplusplus
 }
 #endif
-#endif /* __APP_FILEX_H__ */
+#endif  /* __UX_HOST_MSC_H__ */

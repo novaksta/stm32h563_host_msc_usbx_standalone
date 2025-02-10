@@ -15,7 +15,7 @@
 /**                                                                       */ 
 /** USBX Component                                                        */ 
 /**                                                                       */
-/**   HUB Class                                                           */
+/**   Storage Class                                                       */
 /**                                                                       */
 /**************************************************************************/
 /**************************************************************************/
@@ -26,7 +26,7 @@
 #define UX_SOURCE_CODE
 
 #include "ux_api.h"
-#include "ux_host_class_hub.h"
+#include "ux_host_class_storage.h"
 #include "ux_host_stack.h"
 
 
@@ -34,33 +34,34 @@
 /*                                                                        */ 
 /*  FUNCTION                                               RELEASE        */ 
 /*                                                                        */ 
-/*    _ux_host_class_hub_port_change_enable_process       PORTABLE C      */ 
-/*                                                           6.1          */
+/*    _ux_host_class_storage_unit_ready_test              PORTABLE C      */ 
+/*                                                           6.1.10       */
 /*  AUTHOR                                                                */
 /*                                                                        */
 /*    Chaoqiong Xiao, Microsoft Corporation                               */
 /*                                                                        */
 /*  DESCRIPTION                                                           */
 /*                                                                        */ 
-/*    This function will process a enable condition change.               */ 
+/*    This function will verify that a SCSI unit is ready for data        */ 
+/*    transfer. This command is used when the device does not mount       */ 
+/*    when power is supplied.                                             */ 
 /*                                                                        */ 
 /*  INPUT                                                                 */ 
 /*                                                                        */ 
-/*    hub                                   Pointer to HUB class          */ 
-/*    port                                  Port number                   */ 
-/*    port_status                           Port status                   */ 
+/*    storage                               Pointer to storage class      */ 
 /*                                                                        */ 
 /*  OUTPUT                                                                */ 
 /*                                                                        */ 
-/*    None                                                                */ 
+/*    Completion Status                                                   */ 
 /*                                                                        */ 
 /*  CALLS                                                                 */ 
 /*                                                                        */ 
-/*    _ux_host_class_hub_feature            Set HUB feature               */ 
+/*    _ux_host_class_storage_cbw_initialize Initialize the CBW            */ 
+/*    _ux_host_class_storage_transport      Send transport layer command  */ 
 /*                                                                        */ 
 /*  CALLED BY                                                             */ 
 /*                                                                        */ 
-/*    HUB Class                                                           */ 
+/*    Storage Class                                                       */ 
 /*                                                                        */ 
 /*  RELEASE HISTORY                                                       */ 
 /*                                                                        */ 
@@ -69,20 +70,53 @@
 /*  05-19-2020     Chaoqiong Xiao           Initial Version 6.0           */
 /*  09-30-2020     Chaoqiong Xiao           Modified comment(s),          */
 /*                                            resulting in version 6.1    */
+/*  01-31-2022     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            added standalone support,   */
+/*                                            resulting in version 6.1.10 */
 /*                                                                        */
 /**************************************************************************/
-VOID  _ux_host_class_hub_port_change_enable_process(UX_HOST_CLASS_HUB *hub, UINT port, UINT port_status)
+UINT  _ux_host_class_storage_unit_ready_test(UX_HOST_CLASS_STORAGE *storage)
 {
 
-    UX_PARAMETER_NOT_USED(port_status);
-
-    /* If trace is enabled, insert this event into the trace buffer.  */
-    UX_TRACE_IN_LINE_INSERT(UX_TRACE_HOST_CLASS_HUB_PORT_CHANGE_ENABLE_PROCESS, hub, port, port_status, 0, UX_TRACE_HOST_CLASS_EVENTS, 0, 0)
-
-    /* Here we simply clear the condition so that we don't get awaken again.  */
-    _ux_host_class_hub_feature(hub, port, UX_CLEAR_FEATURE, UX_HOST_CLASS_HUB_C_PORT_ENABLE);
+UINT            status;
+UCHAR           *cbw;
+UINT            command_length;
     
-    /* Return to caller.  */
-    return;
-}   
+    /* If trace is enabled, insert this event into the trace buffer.  */
+    UX_TRACE_IN_LINE_INSERT(UX_TRACE_HOST_CLASS_STORAGE_UNIT_READY_TEST, storage, 0, 0, 0, UX_TRACE_HOST_CLASS_EVENTS, 0, 0)
 
+    /* Use a pointer for the CBW, easier to manipulate.  */
+    cbw =  (UCHAR *) storage -> ux_host_class_storage_cbw;
+
+    /* Get the Unit Ready Test Command Length.  */
+#ifdef UX_HOST_CLASS_STORAGE_INCLUDE_LEGACY_PROTOCOL_SUPPORT
+    if (storage -> ux_host_class_storage_interface -> ux_interface_descriptor.bInterfaceSubClass == UX_HOST_CLASS_STORAGE_SUBCLASS_UFI)
+        command_length =  UX_HOST_CLASS_STORAGE_TEST_READY_COMMAND_LENGTH_UFI;
+    else
+        command_length =  UX_HOST_CLASS_STORAGE_TEST_READY_COMMAND_LENGTH_SBC;
+#else
+    command_length =  UX_HOST_CLASS_STORAGE_TEST_READY_COMMAND_LENGTH_SBC;
+#endif
+
+    /* Initialize the CBW for this command.  */
+    _ux_host_class_storage_cbw_initialize(storage, 0, 0, command_length);
+    
+    /* Prepare the TEST UNIT READY command block.  */
+    *(cbw + UX_HOST_CLASS_STORAGE_CBW_CB + UX_HOST_CLASS_STORAGE_TEST_READY_OPERATION) =  UX_HOST_CLASS_STORAGE_SCSI_TEST_READY;
+
+#if defined(UX_HOST_STANDALONE)
+
+    /* Prepare states.  */
+    UX_HOST_CLASS_STORAGE_TRANS_STATE_RESET(storage);
+    storage -> ux_host_class_storage_state_state = UX_HOST_CLASS_STORAGE_STATE_TRANSPORT;
+    storage -> ux_host_class_storage_state_next = UX_HOST_CLASS_STORAGE_STATE_TEST_CHECK;
+    status = UX_SUCCESS;
+#else
+
+    /* Send the command to transport layer.  */
+    status =  _ux_host_class_storage_transport(storage, UX_NULL);
+#endif
+
+    /* Return completion status.  */
+    return(status);                                            
+}

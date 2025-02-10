@@ -24,7 +24,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "fx_api.h"
-#include "ux_host_msc.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -100,13 +99,13 @@ UINT MX_USBX_Host_Init(VOID)
   /* Register a callback error function */
   ux_utility_error_callback_register(&ux_host_error_callback);
 
-  /* Initialize the host hub class */
-  if (ux_host_stack_class_register(_ux_system_host_class_hub_name,
-                                   ux_host_class_hub_entry) != UX_SUCCESS)
+  /* Initialize the host storage class */
+  if (ux_host_stack_class_register(_ux_system_host_class_storage_name,
+                                   ux_host_class_storage_entry) != UX_SUCCESS)
   {
-    /* USER CODE BEGIN USBX_HOST_HUB_REGISTER_ERROR */
+    /* USER CODE BEGIN USBX_HOST_STORAGE_REGISTER_ERROR */
     return UX_ERROR;
-    /* USER CODE END USBX_HOST_HUB_REGISTER_ERROR */
+    /* USER CODE END USBX_HOST_STORAGE_REGISTER_ERROR */
   }
 
   /* USER CODE BEGIN MX_USBX_Host_Init1 */
@@ -191,16 +190,6 @@ UINT ux_host_event_callback(ULONG event, UX_HOST_CLASS *current_class, VOID *cur
 
           /* Get the storage media */
           storage_media = (UX_HOST_CLASS_STORAGE_MEDIA *)current_class -> ux_host_class_media;
-
-          if (storage_media -> ux_host_class_storage_media_lun != 0)
-          {
-            storage_media = UX_NULL;
-          }
-          else
-          {
-            /* Get the media file */
-            media = &storage_media->ux_host_class_storage_media;
-          }
         }
       }
       /* USER CODE END UX_DEVICE_INSERTION */
@@ -213,11 +202,7 @@ UINT ux_host_event_callback(ULONG event, UX_HOST_CLASS *current_class, VOID *cur
 
       /* USER CODE END UX_DEVICE_REMOVAL */
 
-      break;
-
-    case UX_DEVICE_CONNECTION:
-
-      /* USER CODE BEGIN UX_DEVICE_CONNECTION */
+     /* USER CODE BEGIN UX_DEVICE_CONNECTION */
       dev_connected=1;
       /* USER CODE END UX_DEVICE_CONNECTION */
 

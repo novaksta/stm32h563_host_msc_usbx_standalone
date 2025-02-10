@@ -15,7 +15,7 @@
 /**                                                                       */ 
 /** USBX Component                                                        */ 
 /**                                                                       */
-/**   Hub Class                                                           */
+/**   Storage Class                                                       */
 /**                                                                       */
 /**************************************************************************/
 /**************************************************************************/
@@ -26,7 +26,7 @@
 #define UX_SOURCE_CODE
 
 #include "ux_api.h"
-#include "ux_host_class_hub.h"
+#include "ux_host_class_storage.h"
 #include "ux_host_stack.h"
 
 
@@ -34,7 +34,7 @@
 /*                                                                        */ 
 /*  FUNCTION                                               RELEASE        */ 
 /*                                                                        */ 
-/*    _ux_host_class_hub_change_process                   PORTABLE C      */ 
+/*    _ux_host_class_storage_configure                    PORTABLE C      */ 
 /*                                                           6.1          */
 /*  AUTHOR                                                                */
 /*                                                                        */
@@ -42,12 +42,13 @@
 /*                                                                        */
 /*  DESCRIPTION                                                           */
 /*                                                                        */ 
-/*    This function is called by the topology thread when there has been  */
-/*    activity on the HUB.                                                */ 
+/*    This function calls the USBX stack to do a SET_CONFIGURATION to the */
+/*    storage device. Once the storage is configured, its interface will  */
+/*    be activated. The bulk endpoints enumerated(1 IN, 1 OUT).           */ 
 /*                                                                        */ 
 /*  INPUT                                                                 */ 
 /*                                                                        */ 
-/*    hub                                   Pointer to HUB                */ 
+/*    storage                               Pointer to storage class      */ 
 /*                                                                        */ 
 /*  OUTPUT                                                                */ 
 /*                                                                        */ 
@@ -55,13 +56,13 @@
 /*                                                                        */ 
 /*  CALLS                                                                 */ 
 /*                                                                        */ 
-/*    _ux_host_class_hub_port_change_process Port change process          */ 
-/*    _ux_host_stack_transfer_request       Process transfer request      */ 
-/*    _ux_utility_short_get                 Get 16-bit word               */ 
+/*    _ux_host_stack_configuration_interface_get    Get configuration     */ 
+/*    _ux_host_stack_device_configuration_get       Get device config     */ 
+/*    _ux_host_stack_device_configuration_select    Select configuration  */ 
 /*                                                                        */ 
 /*  CALLED BY                                                             */ 
 /*                                                                        */ 
-/*    HUB Class                                                           */ 
+/*    Storage Class                                                       */ 
 /*                                                                        */ 
 /*  RELEASE HISTORY                                                       */ 
 /*                                                                        */ 
@@ -69,49 +70,87 @@
 /*                                                                        */ 
 /*  05-19-2020     Chaoqiong Xiao           Initial Version 6.0           */
 /*  09-30-2020     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            optimized based on compile  */
+/*                                            definitions,                */
 /*                                            resulting in version 6.1    */
 /*                                                                        */
 /**************************************************************************/
-UINT  _ux_host_class_hub_change_process(UX_HOST_CLASS_HUB *hub)
+UINT  _ux_host_class_storage_configure(UX_HOST_CLASS_STORAGE *storage)
 {
 
-UX_TRANSFER     *transfer_request;
-USHORT          port_status_change_bits;
-UINT            port_index;
-UINT            status;
-    
+UINT                    status;
+UX_CONFIGURATION        *configuration;
+#if UX_MAX_DEVICES > 1
+UX_DEVICE               *parent_device;
+#endif
 
-    /* Now get the transfer_request attached to the interrupt endpoint.  */
-    transfer_request =  &hub -> ux_host_class_hub_interrupt_endpoint -> ux_endpoint_transfer_request;
 
-    /* The interrupt pipe buffer contains the status change for each of the ports 
-       the length of the buffer can be 1 or 2 depending on the number of ports.
-       Usually, since HUBs can be bus powered the maximum number of ports is 4. 
-       We must be taking precautions on how we read the buffer content for
-       big endian machines.  */
-    if (transfer_request -> ux_transfer_request_actual_length == 1)
-        port_status_change_bits =  (USHORT) *transfer_request -> ux_transfer_request_data_pointer;
-    else
-        port_status_change_bits =  (USHORT)_ux_utility_short_get(transfer_request -> ux_transfer_request_data_pointer);
+    /* If the device has been configured already, we don't need to do it
+       again.  */
+    if (storage -> ux_host_class_storage_device -> ux_device_state == UX_DEVICE_CONFIGURED)
+        return(UX_SUCCESS);
 
-    /* Scan all bits and report the change on each port.  */
-    for (port_index = 1; port_index <= hub -> ux_host_class_hub_descriptor.bNbPorts; port_index++)
+    /* A storage device normally has one configuration. So retrieve the 1st configuration
+       only.  */
+    status =  _ux_host_stack_device_configuration_get(storage -> ux_host_class_storage_device, 0, &configuration);
+
+    /* Check completion status.  */
+    if (status != UX_SUCCESS)
     {
+    
+        /* Error trap. */
+        _ux_system_error_handler(UX_SYSTEM_LEVEL_THREAD, UX_SYSTEM_CONTEXT_CLASS, UX_CONFIGURATION_HANDLE_UNKNOWN);
 
-        if (port_status_change_bits & (1<<port_index))
-            _ux_host_class_hub_port_change_process(hub, port_index);
+        /* If trace is enabled, insert this event into the trace buffer.  */
+        UX_TRACE_IN_LINE_INSERT(UX_TRACE_ERROR, UX_CONFIGURATION_HANDLE_UNKNOWN, storage -> ux_host_class_storage_device, 0, 0, UX_TRACE_ERRORS, 0, 0)
+    
+        return(UX_CONFIGURATION_HANDLE_UNKNOWN);
     }
 
-    /* The HUB could also have changed.  */
-    if (port_status_change_bits & 1)
-        _ux_host_class_hub_hub_change_process(hub);
-        
-    /* The actual length should be cleared for the next transfer.  */
-    transfer_request -> ux_transfer_request_actual_length =  0;
+#if UX_MAX_DEVICES > 1
+    /* Check the storage device power source and check the parent power source for 
+       incompatible connections.  */
+    if (storage -> ux_host_class_storage_device -> ux_device_power_source == UX_DEVICE_BUS_POWERED)
+    {
 
-    /* Resend the request to the stack.  */
-    status = _ux_host_stack_transfer_request(transfer_request);
+        /* Pickup pointer to parent device.  */
+        parent_device =  storage -> ux_host_class_storage_device -> ux_device_parent;
+        
+        /* If the device is NULL, the parent is the root hub and we don't have to worry 
+           if the parent is not the root hub, check for its power source.  */
+        if ((parent_device != UX_NULL) && (parent_device -> ux_device_power_source == UX_DEVICE_BUS_POWERED))
+        {                        
+
+            /* Error trap. */
+            _ux_system_error_handler(UX_SYSTEM_LEVEL_THREAD, UX_SYSTEM_CONTEXT_CLASS, UX_CONNECTION_INCOMPATIBLE);
+
+            /* If trace is enabled, insert this event into the trace buffer.  */
+            UX_TRACE_IN_LINE_INSERT(UX_TRACE_ERROR, UX_CONNECTION_INCOMPATIBLE, storage, 0, 0, UX_TRACE_ERRORS, 0, 0)
+
+            return(UX_CONNECTION_INCOMPATIBLE);
+        }            
+    }
+#endif
+
+    /* We have the valid configuration. Ask the USBX stack to set this configuration.  */        
+    status =  _ux_host_stack_device_configuration_select(configuration);
+    if (status != UX_SUCCESS)
+        return(status);
+
+    /* If the operation went well, the storage device default alternate setting
+       for the storage device interface is active and the interrupt endpoint is now enabled.
+       We have to memorize the first interface since the interrupt endpoint is hooked to it.  */
+    status =  _ux_host_stack_configuration_interface_get(configuration, 0, 0, &storage -> ux_host_class_storage_interface);
+
+    /* Check completion status.  */
+    if (status != UX_SUCCESS)
+    {
+        /* Store the instance in the interface container, this is for the USBX stack
+           when it needs to invoke the class.  */        
+        storage -> ux_host_class_storage_interface -> ux_interface_class_instance =  (VOID *) storage;
+    }
 
     /* Return completion status.  */
     return(status);
 }
+

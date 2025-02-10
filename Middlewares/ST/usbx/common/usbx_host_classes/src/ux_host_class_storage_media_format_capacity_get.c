@@ -15,7 +15,7 @@
 /**                                                                       */ 
 /** USBX Component                                                        */ 
 /**                                                                       */
-/**   HUB Class                                                           */
+/**   Storage Class                                                       */
 /**                                                                       */
 /**************************************************************************/
 /**************************************************************************/
@@ -26,7 +26,7 @@
 #define UX_SOURCE_CODE
 
 #include "ux_api.h"
-#include "ux_host_class_hub.h"
+#include "ux_host_class_storage.h"
 #include "ux_host_stack.h"
 
 
@@ -34,27 +34,21 @@
 /*                                                                        */ 
 /*  FUNCTION                                               RELEASE        */ 
 /*                                                                        */ 
-/*    _ux_host_class_hub_feature                          PORTABLE C      */ 
-/*                                                           6.1.12       */
+/*    _ux_host_class_storage_media_format_capacity_get    PORTABLE C      */ 
+/*                                                           6.1.10       */
 /*  AUTHOR                                                                */
 /*                                                                        */
 /*    Chaoqiong Xiao, Microsoft Corporation                               */
 /*                                                                        */
 /*  DESCRIPTION                                                           */
 /*                                                                        */ 
-/*    This function will send a command to the HUB on a specific port.    */
-/*    The commands can be SET_FEATURE or CLEAR_FEATURE.                   */ 
-/*                                                                        */
-/*    In standalone mode, this functioin prepares the control transfer    */
-/*    request context of specific command, for host stack transfer        */
-/*    function to process, in next steps.                                 */
+/*    This function will send a READ_FORMAT_CAPACITY command to the       */
+/*    device. Some USB storage disk require this function for the sanity  */ 
+/*    of their state machine.                                             */ 
 /*                                                                        */ 
 /*  INPUT                                                                 */ 
 /*                                                                        */ 
-/*    hub                                   Pointer to HUB class          */ 
-/*    port                                  Port number                   */ 
-/*    command                               Command to send               */ 
-/*    feature                               Feature to send               */ 
+/*    storage                               Pointer to storage class      */ 
 /*                                                                        */ 
 /*  OUTPUT                                                                */ 
 /*                                                                        */ 
@@ -62,11 +56,15 @@
 /*                                                                        */ 
 /*  CALLS                                                                 */ 
 /*                                                                        */ 
-/*    _ux_host_stack_transfer_request       Process transfer request      */ 
+/*    _ux_host_class_storage_cbw_initialize Initialize CBW                */ 
+/*    _ux_host_class_storage_transport      Send command                  */ 
+/*    _ux_utility_memory_allocate           Allocate memory block         */ 
+/*    _ux_utility_memory_free               Release memory block          */ 
+/*    _ux_utility_short_put_big_endian      Put 32-bit big endian         */
 /*                                                                        */ 
 /*  CALLED BY                                                             */ 
 /*                                                                        */ 
-/*    HUB Class                                                           */ 
+/*    Storage Class                                                       */ 
 /*                                                                        */ 
 /*  RELEASE HISTORY                                                       */ 
 /*                                                                        */ 
@@ -75,48 +73,67 @@
 /*  05-19-2020     Chaoqiong Xiao           Initial Version 6.0           */
 /*  09-30-2020     Chaoqiong Xiao           Modified comment(s),          */
 /*                                            resulting in version 6.1    */
-/*  07-29-2022     Chaoqiong Xiao           Modified comment(s),          */
+/*  01-31-2022     Chaoqiong Xiao           Modified comment(s),          */
 /*                                            added standalone support,   */
-/*                                            resulting in version 6.1.12 */
+/*                                            resulting in version 6.1.10 */
 /*                                                                        */
 /**************************************************************************/
-UINT  _ux_host_class_hub_feature(UX_HOST_CLASS_HUB *hub, UINT port, UINT command, UINT function)
+UINT  _ux_host_class_storage_media_format_capacity_get(UX_HOST_CLASS_STORAGE *storage)
 {
 
-UX_ENDPOINT     *control_endpoint;
-UX_TRANSFER     *transfer_request;
-UINT            target;
-UINT            status;
+UCHAR           *cbw;
+UCHAR           *read_format_capacity_response;
+UINT            command_length;
 
+    /* If trace is enabled, insert this event into the trace buffer.  */
+    UX_TRACE_IN_LINE_INSERT(UX_TRACE_HOST_CLASS_STORAGE_MEDIA_FORMAT_CAPACITY_GET, storage, 0, 0, 0, UX_TRACE_HOST_CLASS_EVENTS, 0, 0)
 
-    /* We need to get the default control endpoint transfer request pointer.  */
-    control_endpoint =  &hub -> ux_host_class_hub_device -> ux_device_control_endpoint;
-    transfer_request =  &control_endpoint -> ux_endpoint_transfer_request;
+    /* Use a pointer for the cbw, easier to manipulate.  */
+    cbw =  (UCHAR *) storage -> ux_host_class_storage_cbw;
 
-    /* The target is DEVICE for the HUB and OTHER for the downstream ports.  */
-    if (port == 0)
-        target =  UX_REQUEST_TARGET_DEVICE;        
+    /* Get the Write Command Length.  */
+#ifdef UX_HOST_CLASS_STORAGE_INCLUDE_LEGACY_PROTOCOL_SUPPORT
+    if (storage -> ux_host_class_storage_interface -> ux_interface_descriptor.bInterfaceSubClass == UX_HOST_CLASS_STORAGE_SUBCLASS_UFI)
+        command_length =  UX_HOST_CLASS_STORAGE_READ_FORMAT_COMMAND_LENGTH_UFI;
     else
-        target =  UX_REQUEST_TARGET_OTHER;
+        command_length =  UX_HOST_CLASS_STORAGE_READ_FORMAT_COMMAND_LENGTH_SBC;
+#else
+    command_length =  UX_HOST_CLASS_STORAGE_READ_FORMAT_COMMAND_LENGTH_SBC;
+#endif
 
-    /* Create a transfer request for the SET_FEATURE or CLEAR_FEATURE request.  */
-    transfer_request -> ux_transfer_request_function =          command;
-    transfer_request -> ux_transfer_request_requested_length =  0;
-    transfer_request -> ux_transfer_request_type =              UX_REQUEST_OUT | UX_REQUEST_TYPE_CLASS | target;
-    transfer_request -> ux_transfer_request_value =             function;
-    transfer_request -> ux_transfer_request_index =             port;
+    /* Initialize the CBW for this command.  */
+    _ux_host_class_storage_cbw_initialize(storage, UX_HOST_CLASS_STORAGE_DATA_IN, UX_HOST_CLASS_STORAGE_READ_FORMAT_RESPONSE_LENGTH, command_length);
+    
+    /* Prepare the READ FORMAT CAPACITY command block.  */
+    *(cbw + UX_HOST_CLASS_STORAGE_CBW_CB + UX_HOST_CLASS_STORAGE_READ_FORMAT_OPERATION) =  UX_HOST_CLASS_STORAGE_SCSI_READ_FORMAT_CAPACITY;
+    
+    /* Store the number of sectors to read.  */
+    _ux_utility_short_put_big_endian(cbw + UX_HOST_CLASS_STORAGE_CBW_CB + UX_HOST_CLASS_STORAGE_READ_FORMAT_PARAMETER_LIST_LENGTH, UX_HOST_CLASS_STORAGE_READ_FORMAT_RESPONSE_LENGTH);
+
+    /* Obtain a block of memory for the answer.  */
+    read_format_capacity_response =  _ux_utility_memory_allocate(UX_SAFE_ALIGN, UX_CACHE_SAFE_MEMORY, UX_HOST_CLASS_STORAGE_READ_FORMAT_RESPONSE_LENGTH);
+    if (read_format_capacity_response == UX_NULL)
+        return(UX_MEMORY_INSUFFICIENT);
 
 #if defined(UX_HOST_STANDALONE)
 
-    /* Reset transfer state for _run.  */
-    UX_TRANSFER_STATE_RESET(transfer_request);
-    status = UX_SUCCESS;
+    /* Initialize main states for GetFormatCapacity().  */
+    UX_HOST_CLASS_STORAGE_TRANS_STATE_RESET(storage);
+    storage -> ux_host_class_storage_memory = read_format_capacity_response;
+    storage -> ux_host_class_storage_state_state = UX_HOST_CLASS_STORAGE_STATE_TRANSPORT;
+    storage -> ux_host_class_storage_state_next = UX_HOST_CLASS_STORAGE_STATE_FORMAT_CAP_SAVE;
+    storage -> ux_host_class_storage_trans_data = read_format_capacity_response;
+    return(UX_SUCCESS);
 #else
 
-    /* Send request to HCD layer.  */
-    status =  _ux_host_stack_transfer_request(transfer_request);
-#endif
+    /* Send the command to transport layer.  */
+    _ux_host_class_storage_transport(storage, read_format_capacity_response);
 
-    /* Return completion status.  */
-    return(status);
+    /* Free the memory resource used for the command response.  */
+    _ux_utility_memory_free(read_format_capacity_response);
+
+    /* If we have a transport error, there is not much we can do, we do not fail.  */
+    return(UX_SUCCESS);                                            
+#endif
 }
+

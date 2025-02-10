@@ -15,7 +15,7 @@
 /**                                                                       */ 
 /** USBX Component                                                        */ 
 /**                                                                       */
-/**   HUB Class                                                           */
+/**   Storage Class                                                       */
 /**                                                                       */
 /**************************************************************************/
 /**************************************************************************/
@@ -26,7 +26,7 @@
 #define UX_SOURCE_CODE
 
 #include "ux_api.h"
-#include "ux_host_class_hub.h"
+#include "ux_host_class_storage.h"
 #include "ux_host_stack.h"
 
 
@@ -34,28 +34,20 @@
 /*                                                                        */ 
 /*  FUNCTION                                               RELEASE        */ 
 /*                                                                        */ 
-/*    _ux_host_class_hub_status_get                       PORTABLE C      */ 
-/*                                                           6.1.12       */
+/*    _ux_host_class_storage_media_characteristics_get    PORTABLE C      */ 
+/*                                                           6.1.10       */
 /*  AUTHOR                                                                */
 /*                                                                        */
 /*    Chaoqiong Xiao, Microsoft Corporation                               */
 /*                                                                        */
 /*  DESCRIPTION                                                           */
 /*                                                                        */ 
-/*    This function will do a GET_STATUS from the HUB. This function      */ 
-/*    retrieves the current status and the changed bits.                  */ 
-/*                                                                        */
-/*    In standalone mode, this functioin prepares the control transfer    */
-/*    request data memory and request context of specific command, for    */
-/*    host stack transfer function to process, in next steps. The         */
-/*    allocated memory must be freed after transfer request is processed. */
+/*    This function will send a INQUIRY command to get the type of        */
+/*    device/media we are dealing with.                                   */ 
 /*                                                                        */ 
 /*  INPUT                                                                 */ 
 /*                                                                        */ 
-/*    hub                                   Pointer to HUB class          */ 
-/*    port                                  Port of device                */ 
-/*    port_status                           Destination for port status   */ 
-/*    port_change                           Destination for port change   */ 
+/*    storage                               Pointer to storage class      */ 
 /*                                                                        */ 
 /*  OUTPUT                                                                */ 
 /*                                                                        */ 
@@ -63,14 +55,16 @@
 /*                                                                        */ 
 /*  CALLS                                                                 */ 
 /*                                                                        */ 
-/*    _ux_host_stack_transfer_request       Process transfer request      */ 
+/*    _ux_host_class_storage_cbw_initialize Initialize CBW                */ 
+/*    _ux_host_class_storage_transport      Send command                  */ 
+/*    _ux_host_class_storage_media_capacity_get                           */
+/*                                          Get media capacity            */
 /*    _ux_utility_memory_allocate           Allocate memory block         */ 
 /*    _ux_utility_memory_free               Release memory block          */ 
-/*    _ux_utility_short_get                 Get 16-bit word               */ 
 /*                                                                        */ 
 /*  CALLED BY                                                             */ 
 /*                                                                        */ 
-/*    HUB Class                                                           */ 
+/*    Storage Class                                                       */ 
 /*                                                                        */ 
 /*  RELEASE HISTORY                                                       */ 
 /*                                                                        */ 
@@ -79,86 +73,77 @@
 /*  05-19-2020     Chaoqiong Xiao           Initial Version 6.0           */
 /*  09-30-2020     Chaoqiong Xiao           Modified comment(s),          */
 /*                                            resulting in version 6.1    */
-/*  07-29-2022     Chaoqiong Xiao           Modified comment(s),          */
+/*  01-31-2022     Chaoqiong Xiao           Modified comment(s),          */
 /*                                            added standalone support,   */
-/*                                            resulting in version 6.1.12 */
+/*                                            resulting in version 6.1.10 */
 /*                                                                        */
 /**************************************************************************/
-UINT  _ux_host_class_hub_status_get(UX_HOST_CLASS_HUB *hub, UINT port, USHORT *port_status, USHORT *port_change)
+UINT  _ux_host_class_storage_media_characteristics_get(UX_HOST_CLASS_STORAGE *storage)
 {
 
-UCHAR           *port_data;
-UX_ENDPOINT     *control_endpoint;
-UX_TRANSFER     *transfer_request;
-UINT            target;
 UINT            status;
+UCHAR           *cbw;
+UCHAR           *inquiry_response;
+UINT            command_length;
 
+    /* Use a pointer for the cbw, easier to manipulate.  */
+    cbw =  (UCHAR *) storage -> ux_host_class_storage_cbw;
 
-    /* We need to get the default control endpoint transfer request pointer.  */
-    control_endpoint =  &hub -> ux_host_class_hub_device -> ux_device_control_endpoint;
-    transfer_request =  &control_endpoint -> ux_endpoint_transfer_request;
-
-    /* The target is DEVICE for the HUB and OTHER for the downstream ports.  */
-    if (port == 0)
-        target =  UX_REQUEST_TARGET_DEVICE;        
+    /* Get the Write Command Length.  */
+#ifdef UX_HOST_CLASS_STORAGE_INCLUDE_LEGACY_PROTOCOL_SUPPORT
+    if (storage -> ux_host_class_storage_interface -> ux_interface_descriptor.bInterfaceSubClass == UX_HOST_CLASS_STORAGE_SUBCLASS_UFI)
+        command_length =  UX_HOST_CLASS_STORAGE_INQUIRY_COMMAND_LENGTH_UFI;
     else
-        target =  UX_REQUEST_TARGET_OTHER;
+        command_length =  UX_HOST_CLASS_STORAGE_INQUIRY_COMMAND_LENGTH_SBC;
+#else
+    command_length =  UX_HOST_CLASS_STORAGE_INQUIRY_COMMAND_LENGTH_SBC;
+#endif
 
-    /* Allocate a buffer for the port status and change: 2 words.  */        
-    port_data =  _ux_utility_memory_allocate(UX_SAFE_ALIGN, UX_CACHE_SAFE_MEMORY, 4);
-    if(port_data == UX_NULL)
+    /* Initialize the CBW for this command.  */
+    _ux_host_class_storage_cbw_initialize(storage, UX_HOST_CLASS_STORAGE_DATA_IN, UX_HOST_CLASS_STORAGE_INQUIRY_RESPONSE_LENGTH, command_length);
+    
+    /* Prepare the INQUIRY command block.  */
+    *(cbw + UX_HOST_CLASS_STORAGE_CBW_CB + UX_HOST_CLASS_STORAGE_INQUIRY_OPERATION) =  UX_HOST_CLASS_STORAGE_SCSI_INQUIRY;
+    
+    /* Store the length of the Inquiry Response.  */
+    *(cbw + UX_HOST_CLASS_STORAGE_CBW_CB + UX_HOST_CLASS_STORAGE_INQUIRY_ALLOCATION_LENGTH) =  UX_HOST_CLASS_STORAGE_INQUIRY_RESPONSE_LENGTH;
+
+    /* Obtain a block of memory for the answer.  */
+    inquiry_response =  _ux_utility_memory_allocate(UX_SAFE_ALIGN, UX_CACHE_SAFE_MEMORY, UX_HOST_CLASS_STORAGE_INQUIRY_RESPONSE_LENGTH);
+    if (inquiry_response == UX_NULL)
         return(UX_MEMORY_INSUFFICIENT);
 
-    /* Create a transfer request for the GET_STATUS request.  */
-    transfer_request -> ux_transfer_request_requested_length =  4;
-    transfer_request -> ux_transfer_request_data_pointer =      port_data;
-    transfer_request -> ux_transfer_request_function =          UX_HOST_CLASS_HUB_GET_STATUS;
-    transfer_request -> ux_transfer_request_type =              UX_REQUEST_IN | UX_REQUEST_TYPE_CLASS | target;
-    transfer_request -> ux_transfer_request_value =             0;
-    transfer_request -> ux_transfer_request_index =             port;
-
 #if defined(UX_HOST_STANDALONE)
-
-    /* No status change change copy.  */
-    UX_PARAMETER_NOT_USED(port_status);
-    UX_PARAMETER_NOT_USED(port_change);
-
-    /* Save allocated buffer.  */
-    hub -> ux_host_class_hub_allocated = port_data;
-
-    /* Reset transfer state for _run.  */
-    UX_TRANSFER_STATE_RESET(transfer_request);
+    UX_HOST_CLASS_STORAGE_TRANS_STATE_RESET(storage);
+    storage -> ux_host_class_storage_memory = inquiry_response;
+    storage -> ux_host_class_storage_state_state = UX_HOST_CLASS_STORAGE_STATE_TRANSPORT;
+    storage -> ux_host_class_storage_state_next = UX_HOST_CLASS_STORAGE_STATE_INQUIRY_SAVE;
+    storage -> ux_host_class_storage_trans_data = inquiry_response;
     status = UX_SUCCESS;
+    return(status);
 #else
+    /* Send the command to transport layer.  */
+    status =  _ux_host_class_storage_transport(storage, inquiry_response);
 
-    /* Send request to HCD layer.  */
-    status =  _ux_host_stack_transfer_request(transfer_request);
-
-    /* Check for error and completion of the transfer.  */
+    /* If we have a transport error, there is not much we can do, simply return the
+       error.  */
     if (status == UX_SUCCESS)
     {
 
-        if (transfer_request -> ux_transfer_request_actual_length == 4)
-        {
+        /* The Inquiry response contains the type of device/media and a media removable flag.  */
+        storage -> ux_host_class_storage_media_type =                                                       *(inquiry_response + UX_HOST_CLASS_STORAGE_INQUIRY_RESPONSE_PERIPHERAL_TYPE);
+        storage -> ux_host_class_storage_lun_removable_media_flags[storage -> ux_host_class_storage_lun] =  *(inquiry_response + UX_HOST_CLASS_STORAGE_INQUIRY_RESPONSE_REMOVABLE_MEDIA);
 
-            /* The 2 words are now in the buffer. We need to resolve their endianness
-               and report them as separate items to the called.  */
-            *port_status =  (USHORT)_ux_utility_short_get(port_data);
-            *port_change =  (USHORT)_ux_utility_short_get(port_data+2);
-        }
-        else
-        {
+        /* Attempt to read the device capacity in order to retrieve the Sector Size. If the command fails,
+           we will default to 512 bytes for a regular drive and 2048 bytes for a CD-ROM or optical drive.  */
+        status =  _ux_host_class_storage_media_capacity_get(storage);
+    }       
 
-            /* Invalid length. Return error.  */
-            status =  UX_TRANSFER_DATA_LESS_THAN_EXPECTED;
-        }
-    }
-
-    /* Free the buffer resource now.  */
-    _ux_utility_memory_free(port_data);
-
-#endif
-
+    /* Free the memory resource used for the command response.  */
+    _ux_utility_memory_free(inquiry_response);
+    
     /* Return completion status.  */
-    return(status);
+    return(status);                                            
+#endif
 }
+

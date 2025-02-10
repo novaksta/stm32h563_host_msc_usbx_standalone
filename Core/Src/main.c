@@ -46,7 +46,7 @@
 HCD_HandleTypeDef hhcd_USB_DRD_FS;
 
 /* USER CODE BEGIN PV */
-extern uint32_t dev_connected=0;
+extern uint32_t dev_connected;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -104,7 +104,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    USBX_Host_Process(NULL);
+    ux_host_stack_tasks_run();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

@@ -15,7 +15,7 @@
 /**                                                                       */ 
 /** USBX Component                                                        */ 
 /**                                                                       */
-/**   HUB Class                                                           */
+/**   Storage Class                                                       */
 /**                                                                       */
 /**************************************************************************/
 /**************************************************************************/
@@ -26,7 +26,7 @@
 #define UX_SOURCE_CODE
 
 #include "ux_api.h"
-#include "ux_host_class_hub.h"
+#include "ux_host_class_storage.h"
 #include "ux_host_stack.h"
 
 
@@ -34,7 +34,7 @@
 /*                                                                        */ 
 /*  FUNCTION                                               RELEASE        */ 
 /*                                                                        */ 
-/*    _ux_host_class_hub_port_change_process              PORTABLE C      */ 
+/*    _ux_host_class_storage_media_recovery_sense_get     PORTABLE C      */ 
 /*                                                           6.1          */
 /*  AUTHOR                                                                */
 /*                                                                        */
@@ -42,12 +42,12 @@
 /*                                                                        */
 /*  DESCRIPTION                                                           */
 /*                                                                        */ 
-/*    This function will process a port change indication.                */ 
+/*    This function will send a MODE_SENSE command to recover from a read */
+/*    and write error.                                                    */ 
 /*                                                                        */ 
 /*  INPUT                                                                 */ 
 /*                                                                        */ 
-/*    hub                                   Pointer to HUB class          */ 
-/*    port                                  Port number                   */ 
+/*    storage                               Pointer to storage class      */ 
 /*                                                                        */ 
 /*  OUTPUT                                                                */ 
 /*                                                                        */ 
@@ -55,21 +55,15 @@
 /*                                                                        */ 
 /*  CALLS                                                                 */ 
 /*                                                                        */ 
-/*    _ux_host_class_hub_port_change_connection_process                   */ 
-/*                                          Process connection            */ 
-/*    _ux_host_class_hub_port_change_enable_process                       */ 
-/*                                          Enable process                */ 
-/*    _ux_host_class_hub_port_change_over_current_process                 */ 
-/*                                          Change over current process   */ 
-/*    _ux_host_class_hub_port_change_reset_process                        */ 
-/*                                          Reset process                 */ 
-/*    _ux_host_class_hub_port_change_suspend_process                      */ 
-/*                                          Suspend process               */ 
-/*    _ux_host_class_hub_status_get         Get HUB status                */ 
+/*    _ux_host_class_storage_cbw_initialize Initialize CBW                */ 
+/*    _ux_host_class_storage_transport      Send command                  */ 
+/*    _ux_utility_memory_allocate           Allocate memory block         */ 
+/*    _ux_utility_memory_free               Release memory block          */ 
+/*    _ux_utility_short_put_big_endian      Put short value               */ 
 /*                                                                        */ 
 /*  CALLED BY                                                             */ 
 /*                                                                        */ 
-/*    HUB Class                                                           */ 
+/*    Storage Class                                                       */ 
 /*                                                                        */ 
 /*  RELEASE HISTORY                                                       */ 
 /*                                                                        */ 
@@ -80,37 +74,65 @@
 /*                                            resulting in version 6.1    */
 /*                                                                        */
 /**************************************************************************/
-UINT  _ux_host_class_hub_port_change_process(UX_HOST_CLASS_HUB *hub, UINT port)
+UINT  _ux_host_class_storage_media_recovery_sense_get(UX_HOST_CLASS_STORAGE *storage)
 {
 
-USHORT      port_status;
-USHORT      port_change;
-UINT        status;
+UINT            status;
+UCHAR           *cbw;
+UCHAR           *mode_sense_response;
+UINT            command_length;
+
+
+    /* Use a pointer for the cbw, easier to manipulate.  */
+    cbw =  (UCHAR *) storage -> ux_host_class_storage_cbw;
+
+    /* Get the Write Command Length.  */
+#ifdef UX_HOST_CLASS_STORAGE_INCLUDE_LEGACY_PROTOCOL_SUPPORT
+    if (storage -> ux_host_class_storage_interface -> ux_interface_descriptor.bInterfaceSubClass == UX_HOST_CLASS_STORAGE_SUBCLASS_UFI)
+        command_length =  UX_HOST_CLASS_STORAGE_MODE_SENSE_COMMAND_LENGTH_UFI;
+    else
+        command_length =  UX_HOST_CLASS_STORAGE_MODE_SENSE_COMMAND_LENGTH_SBC;
+#else
+    command_length =  UX_HOST_CLASS_STORAGE_MODE_SENSE_COMMAND_LENGTH_SBC;
+#endif
+
+    /* Initialize the CBW for this command.  */
+    _ux_host_class_storage_cbw_initialize(storage, UX_HOST_CLASS_STORAGE_DATA_IN, UX_HOST_CLASS_STORAGE_MODE_SENSE_TP_PAGE, command_length);
     
+    /* Prepare the MODE_SENSE command block.  Distinguish between SUBCLASSES. */
+    switch (storage -> ux_host_class_storage_interface -> ux_interface_descriptor.bInterfaceSubClass)
+    {
+    
+        case UX_HOST_CLASS_STORAGE_SUBCLASS_RBC         :
+#ifdef UX_HOST_CLASS_STORAGE_INCLUDE_LEGACY_PROTOCOL_SUPPORT
+        case UX_HOST_CLASS_STORAGE_SUBCLASS_UFI         :
+#endif
+            *(cbw + UX_HOST_CLASS_STORAGE_CBW_CB + UX_HOST_CLASS_STORAGE_MODE_SENSE_OPERATION) =  UX_HOST_CLASS_STORAGE_SCSI_MODE_SENSE;
+            break;
 
-    /* First step is to retrieve the status on the port with a GET_STATUS.  */
-    status =  _ux_host_class_hub_status_get(hub, port, &port_status, &port_change);
-    if (status != UX_SUCCESS)
-        return(status);
-            
-    /* On return of the GET_STATUS, the port change field has been updated 
-       check for each of the bits it may contain.  */
-    if (port_change & UX_HOST_CLASS_HUB_PORT_CHANGE_CONNECTION)
-        _ux_host_class_hub_port_change_connection_process(hub, port, port_status);       
+        default                                         :            
+            *(cbw + UX_HOST_CLASS_STORAGE_CBW_CB + UX_HOST_CLASS_STORAGE_MODE_SENSE_OPERATION) =  UX_HOST_CLASS_STORAGE_SCSI_MODE_SENSE_SHORT;
+            break;
+    }
+    
+    /* We ask for a specific page page but we put the buffer to maximum size.  */
+    *(cbw + UX_HOST_CLASS_STORAGE_CBW_CB + UX_HOST_CLASS_STORAGE_MODE_SENSE_PC_PAGE_CODE) = UX_HOST_CLASS_STORAGE_MODE_SENSE_TP_PAGE;
+    
+    /* Store the length of the Mode Sense Response.  */
+    _ux_utility_short_put_big_endian(cbw + UX_HOST_CLASS_STORAGE_CBW_CB + UX_HOST_CLASS_STORAGE_MODE_SENSE_PARAMETER_LIST_LENGTH, UX_HOST_CLASS_STORAGE_MODE_SENSE_ALL_PAGE_LENGTH);
 
-    if (port_change & UX_HOST_CLASS_HUB_PORT_CHANGE_ENABLE)
-        _ux_host_class_hub_port_change_enable_process(hub, port, port_status);       
-
-    if (port_change & UX_HOST_CLASS_HUB_PORT_CHANGE_SUSPEND)
-        _ux_host_class_hub_port_change_suspend_process(hub, port, port_status);       
-
-    if (port_change & UX_HOST_CLASS_HUB_PORT_CHANGE_OVER_CURRENT)
-        _ux_host_class_hub_port_change_over_current_process(hub, port, port_status);       
-
-    if (port_change & UX_HOST_CLASS_HUB_PORT_CHANGE_RESET)
-        _ux_host_class_hub_port_change_reset_process(hub, port, port_status);       
-           
-    /* Return successful completion.  */
-    return(UX_SUCCESS);
+    /* Obtain a block of memory for the answer.  */
+    mode_sense_response =  _ux_utility_memory_allocate(UX_SAFE_ALIGN, UX_CACHE_SAFE_MEMORY, UX_HOST_CLASS_STORAGE_MODE_SENSE_ALL_PAGE_LENGTH);
+    if (mode_sense_response == UX_NULL)
+        return(UX_MEMORY_INSUFFICIENT);
+    
+    /* Send the command to transport layer.  */
+    status =  _ux_host_class_storage_transport(storage, mode_sense_response);
+    
+    /* Free the memory resource used for the command response.  */
+    _ux_utility_memory_free(mode_sense_response);
+    
+    /* Return completion status.  */
+    return(status);                                            
 }
 

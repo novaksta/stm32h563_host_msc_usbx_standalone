@@ -28,7 +28,7 @@ extern "C" {
 /* Includes ------------------------------------------------------------------*/
 #include "ux_api.h"
 #include "main.h"
-#include "ux_host_class_hub.h"
+#include "ux_host_msc.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */

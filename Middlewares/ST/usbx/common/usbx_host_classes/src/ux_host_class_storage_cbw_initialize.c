@@ -15,7 +15,7 @@
 /**                                                                       */ 
 /** USBX Component                                                        */ 
 /**                                                                       */
-/**   HUB Class                                                           */
+/**   Storage Class                                                       */
 /**                                                                       */
 /**************************************************************************/
 /**************************************************************************/
@@ -26,7 +26,7 @@
 #define UX_SOURCE_CODE
 
 #include "ux_api.h"
-#include "ux_host_class_hub.h"
+#include "ux_host_class_storage.h"
 #include "ux_host_stack.h"
 
 
@@ -34,21 +34,24 @@
 /*                                                                        */ 
 /*  FUNCTION                                               RELEASE        */ 
 /*                                                                        */ 
-/*    _ux_host_class_hub_port_change_over_current_process PORTABLE C      */ 
-/*                                                           6.1          */
+/*    _ux_host_class_storage_cbw_initialize               PORTABLE C      */ 
+/*                                                           6.1.3        */
 /*  AUTHOR                                                                */
 /*                                                                        */
 /*    Chaoqiong Xiao, Microsoft Corporation                               */
 /*                                                                        */
 /*  DESCRIPTION                                                           */
 /*                                                                        */ 
-/*    This function will process a over current condition change.         */ 
+/*    This function will initialize the Command Block Wrapper (CBW) that  */ 
+/*    encapsulate the SCSI request to be sent to the storage device.      */
+/*    The CBW is normally used only for the BO protocol.                  */ 
 /*                                                                        */ 
 /*  INPUT                                                                 */ 
 /*                                                                        */ 
-/*    hub                                   Pointer to HUB class          */ 
-/*    port                                  Port number                   */ 
-/*    port_status                           Port status                   */ 
+/*    storage                               Pointer to storage class      */ 
+/*    flags                                 Flags for transfer            */ 
+/*    data_transfer_length                  Length of data transfer       */ 
+/*    command_length                        Length of command             */ 
 /*                                                                        */ 
 /*  OUTPUT                                                                */ 
 /*                                                                        */ 
@@ -56,11 +59,12 @@
 /*                                                                        */ 
 /*  CALLS                                                                 */ 
 /*                                                                        */ 
-/*    _ux_host_class_hub_feature            Set HUB feature               */ 
+/*    _ux_utility_long_put                  Write a 32-bit value          */ 
+/*    _ux_utility_memory_set                Set memory to a value         */ 
 /*                                                                        */ 
 /*  CALLED BY                                                             */ 
 /*                                                                        */ 
-/*    HUB Class                                                           */ 
+/*    Storage Class                                                       */ 
 /*                                                                        */ 
 /*  RELEASE HISTORY                                                       */ 
 /*                                                                        */ 
@@ -68,24 +72,46 @@
 /*                                                                        */ 
 /*  05-19-2020     Chaoqiong Xiao           Initial Version 6.0           */
 /*  09-30-2020     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            verified memset and memcpy  */
+/*                                            cases,                      */
 /*                                            resulting in version 6.1    */
+/*  12-31-2020     Chaoqiong Xiao           Modified comment(s),          */
+/*                                            resulting in version 6.1.3  */
 /*                                                                        */
 /**************************************************************************/
-VOID  _ux_host_class_hub_port_change_over_current_process(UX_HOST_CLASS_HUB *hub, UINT port, UINT port_status)
+VOID  _ux_host_class_storage_cbw_initialize(UX_HOST_CLASS_STORAGE *storage, UINT flags,
+                                            ULONG data_transfer_length, UINT command_length)
 {
 
-    UX_PARAMETER_NOT_USED(port_status);
+UCHAR   *cbw;
+    
 
-    /* If trace is enabled, insert this event into the trace buffer.  */
-    UX_TRACE_IN_LINE_INSERT(UX_TRACE_HOST_CLASS_HUB_PORT_CHANGE_OVER_CURRENT_PROCESS, hub, port, port_status, 0, UX_TRACE_HOST_CLASS_EVENTS, 0, 0)
+    /* Use a pointer for the cbw, easier to manipulate.  */
+    cbw =  (UCHAR *) storage -> ux_host_class_storage_cbw;
 
-    /* Here we simply clear the condition so that we don't get awaken again.  */
-    _ux_host_class_hub_feature(hub, port, UX_CLEAR_FEATURE, UX_HOST_CLASS_HUB_C_PORT_OVER_CURRENT);
+    /* Store the signature of the CBW.  */
+    _ux_utility_long_put(cbw, UX_HOST_CLASS_STORAGE_CBW_SIGNATURE_MASK);
+    
+    /* Set the Tag, this value is simply an arbitrary number that is echoed by 
+       the device in the CSW.  */
+    _ux_utility_long_put(cbw + UX_HOST_CLASS_STORAGE_CBW_TAG, UX_HOST_CLASS_STORAGE_CBW_TAG_MASK);
 
-    /* Error trap. */
-    _ux_system_error_handler(UX_SYSTEM_LEVEL_THREAD, UX_SYSTEM_CONTEXT_HUB, UX_OVER_CURRENT_CONDITION);
+    /* Store the Data Transfer Length expected for the data payload.  */
+    _ux_utility_long_put(cbw + UX_HOST_CLASS_STORAGE_CBW_DATA_LENGTH, data_transfer_length);
+
+    /* Store the CBW Flag field that contains the transfer flags.  */
+    *(cbw + UX_HOST_CLASS_STORAGE_CBW_FLAGS) =  (UCHAR)flags;
+    
+    /* Store the LUN value.  */
+    *(cbw + UX_HOST_CLASS_STORAGE_CBW_LUN) =  (UCHAR)storage -> ux_host_class_storage_lun;
+
+    /* Store the size of the SCSI command block that follows.  */
+    *(cbw + UX_HOST_CLASS_STORAGE_CBW_CB_LENGTH) =  (UCHAR)command_length;
+
+    /* Reset the SCSI command block.  */
+    _ux_utility_memory_set(cbw + UX_HOST_CLASS_STORAGE_CBW_CB, 0, (ULONG) command_length); /* Use case of memset is verified. */
 
     /* Return to caller.  */
     return;
-}   
+}
 
