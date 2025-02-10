@@ -112,6 +112,7 @@ UINT MX_USBX_Host_Init(VOID)
   }
 
   /* USER CODE BEGIN MX_USBX_Host_Init1 */
+  MX_USB_HCD_Init();
   /* Register all the USB host controllers available in this system. */
   ux_host_stack_hcd_register(_ux_system_host_hcd_stm32_name, _ux_hcd_stm32_initialize, (ULONG)USB_DRD_FS, (ULONG)&hhcd_USB_DRD_FS);
   /* Start USB Host */
