@@ -47,6 +47,13 @@ HCD_HandleTypeDef hhcd_USB_DRD_FS;
 
 /* USER CODE BEGIN PV */
 extern uint32_t dev_connected;
+
+FX_MEDIA usb_disk;
+FX_FILE  fx_file;
+
+UINT media_memory[512 / sizeof(UINT)];
+UINT ret;
+UINT data[8]={1,2,3,4,5,6,7,8};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -103,6 +110,17 @@ int main(void)
   while (1)
   {
     ux_host_stack_tasks_run();
+    if(dev_connected){
+      ret = fx_media_open(&usb_disk,  "STM32_USB_DISK", fx_stm32_custom_driver, (VOID *)FX_NULL, (VOID *) media_memory, sizeof(media_memory));
+
+      ret =  fx_file_create(&usb_disk, "STM32.TXT");
+        /* Open the test file. */
+      ret =  fx_file_open(&usb_disk, &fx_file, "STM32.TXT", FX_OPEN_FOR_WRITE);
+      /* Seek to the beginning of the test file. */
+      ret =  fx_file_seek(&fx_file, 0);
+      /* Write a string to the test file. */
+      ret =  fx_file_write(&fx_file, data, sizeof(data));
+    }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

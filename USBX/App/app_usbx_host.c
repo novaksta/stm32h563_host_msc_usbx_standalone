@@ -159,7 +159,7 @@ ULONG _ux_utility_time_get(VOID)
   ULONG time_tick = 0U;
 
   /* USER CODE BEGIN _ux_utility_time_get */
-
+  time_tick = HAL_GetTick();
   /* USER CODE END _ux_utility_time_get */
 
   return time_tick;
@@ -194,6 +194,7 @@ UINT ux_host_event_callback(ULONG event, UX_HOST_CLASS *current_class, VOID *cur
         {
           /* Get current Storage Instance */
           storage = (UX_HOST_CLASS_STORAGE *)current_instance;
+          dev_connected=1;
 
           /* Get the storage media */
           storage_media = (UX_HOST_CLASS_STORAGE_MEDIA *)current_class -> ux_host_class_media;
@@ -214,7 +215,7 @@ UINT ux_host_event_callback(ULONG event, UX_HOST_CLASS *current_class, VOID *cur
     case UX_DEVICE_CONNECTION:
 
       /* USER CODE BEGIN UX_DEVICE_CONNECTION */
-      dev_connected=1;
+
       /* USER CODE END UX_DEVICE_CONNECTION */
 
       break;

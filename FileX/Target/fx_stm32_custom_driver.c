@@ -39,7 +39,7 @@
 // - ux_host_class_storage_media_write : write sectors on locked media
 // - ux_host_class_storage_media_unlock : unlock media
 
-extern UX_HOST_CLASS_STORAGE *storage;
+// extern UX_HOST_CLASS_STORAGE *storage;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -54,9 +54,14 @@ extern UX_HOST_CLASS_STORAGE *storage;
 VOID  fx_stm32_custom_driver(FX_MEDIA *media_ptr)
 {
   /* USER CODE BEGIN USER_CODE_SECTION_1 */
-  UINT status;
-  ULONG partition_start;
-  ULONG partition_size;
+  UINT                            status;
+  UX_HOST_CLASS_STORAGE           *storage;
+  UX_HOST_CLASS_STORAGE_MEDIA     *storage_media;
+  ULONG                           partition_start;
+
+  storage_media = (UX_HOST_CLASS_STORAGE_MEDIA *) media -> fx_media_driver_info;
+  storage = storage_media -> ux_host_class_storage_media_storage;
+  partition_start = (ULONG) media -> fx_media_reserved_for_user;
   /* USER CODE END USER_CODE_SECTION_1 */
 
   switch (media_ptr->fx_media_driver_request)
@@ -65,7 +70,8 @@ VOID  fx_stm32_custom_driver(FX_MEDIA *media_ptr)
     {
 
      /* USER CODE BEGIN DRIVER_INIT */
-
+    /* Poll status.  */
+    _ux_host_class_storage_media_check(storage);
      /* USER CODE END DRIVER_INIT */
 
       media_ptr->fx_media_driver_status = FX_SUCCESS;
