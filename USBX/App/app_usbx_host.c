@@ -23,7 +23,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "fx_api.h"
+#include "ux_host_msc.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -51,7 +52,10 @@
 #endif
 __ALIGN_BEGIN static UCHAR ux_host_byte_pool_buffer[UX_HOST_APP_MEM_POOL_SIZE] __ALIGN_END;
 /* USER CODE BEGIN PV */
-
+volatile uint32_t dev_connected=0;
+FX_MEDIA *media;
+UX_HOST_CLASS_STORAGE *storage;
+UX_HOST_CLASS_STORAGE_MEDIA *storage_media;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -177,7 +181,28 @@ UINT ux_host_event_callback(ULONG event, UX_HOST_CLASS *current_class, VOID *cur
     case UX_DEVICE_INSERTION:
 
       /* USER CODE BEGIN UX_DEVICE_INSERTION */
+      /* Get current Storage Class */
+      if (current_class -> ux_host_class_entry_function == ux_host_class_storage_entry)
+      {
+        if (storage == UX_NULL)
+        {
+          /* Get current Storage Instance */
+          storage = (UX_HOST_CLASS_STORAGE *)current_instance;
 
+          /* Get the storage media */
+          storage_media = (UX_HOST_CLASS_STORAGE_MEDIA *)current_class -> ux_host_class_media;
+
+          if (storage_media -> ux_host_class_storage_media_lun != 0)
+          {
+            storage_media = UX_NULL;
+          }
+          else
+          {
+            /* Get the media file */
+            media = &storage_media->ux_host_class_storage_media;
+          }
+        }
+      }
       /* USER CODE END UX_DEVICE_INSERTION */
 
       break;
@@ -193,7 +218,7 @@ UINT ux_host_event_callback(ULONG event, UX_HOST_CLASS *current_class, VOID *cur
     case UX_DEVICE_CONNECTION:
 
       /* USER CODE BEGIN UX_DEVICE_CONNECTION */
-
+      dev_connected=1;
       /* USER CODE END UX_DEVICE_CONNECTION */
 
       break;
@@ -201,7 +226,14 @@ UINT ux_host_event_callback(ULONG event, UX_HOST_CLASS *current_class, VOID *cur
     case UX_DEVICE_DISCONNECTION:
 
       /* USER CODE BEGIN UX_DEVICE_DISCONNECTION */
-
+      dev_connected=0;
+      if ((VOID*)storage == current_instance)
+      {
+        /* Clear storage media instance & media file */
+        storage = UX_NULL;
+        storage_media = UX_NULL;
+        media = UX_NULL;
+      }
       /* USER CODE END UX_DEVICE_DISCONNECTION */
 
       break;
