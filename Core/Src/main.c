@@ -50,8 +50,9 @@ extern uint32_t dev_connected;
 
 FX_MEDIA usb_disk;
 FX_FILE  fx_file;
+extern UX_HOST_CLASS_STORAGE_MEDIA *storage_media;
 
-UINT media_memory[512 / sizeof(UINT)];
+UINT media_memory[2048 / sizeof(UINT)];
 UINT ret;
 UINT data[8]={1,2,3,4,5,6,7,8};
 /* USER CODE END PV */
@@ -111,7 +112,7 @@ int main(void)
   {
     ux_host_stack_tasks_run();
     if(dev_connected){
-      ret = fx_media_open(&usb_disk,  "STM32_USB_DISK", fx_stm32_custom_driver, (VOID *)FX_NULL, (VOID *) media_memory, sizeof(media_memory));
+      ret = fx_media_open(&usb_disk,  "STM32_USB_DISK", fx_stm32_custom_driver, (VOID *)storage_media, (VOID *) media_memory, sizeof(media_memory));
 
       ret =  fx_file_create(&usb_disk, "STM32.TXT");
         /* Open the test file. */

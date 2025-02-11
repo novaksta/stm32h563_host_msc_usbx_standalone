@@ -53,7 +53,8 @@
 __ALIGN_BEGIN static UCHAR ux_host_byte_pool_buffer[UX_HOST_APP_MEM_POOL_SIZE] __ALIGN_END;
 /* USER CODE BEGIN PV */
 volatile uint32_t dev_connected=0;
-FX_MEDIA *media;
+
+extern FX_MEDIA usb_disk;
 UX_HOST_CLASS_STORAGE *storage;
 UX_HOST_CLASS_STORAGE_MEDIA *storage_media;
 
@@ -198,6 +199,9 @@ UINT ux_host_event_callback(ULONG event, UX_HOST_CLASS *current_class, VOID *cur
 
           /* Get the storage media */
           storage_media = (UX_HOST_CLASS_STORAGE_MEDIA *)current_class -> ux_host_class_media;
+          storage_media -> ux_host_class_storage_media_storage = storage;
+          storage_media -> ux_host_class_storage_media_status = UX_USED;
+          usb_disk.fx_media_driver_info= storage_media;
         }
       }
       /* USER CODE END UX_DEVICE_INSERTION */
@@ -229,7 +233,7 @@ UINT ux_host_event_callback(ULONG event, UX_HOST_CLASS *current_class, VOID *cur
         /* Clear storage media instance & media file */
         storage = UX_NULL;
         storage_media = UX_NULL;
-        media = UX_NULL;
+        // media = UX_NULL;
       }
       /* USER CODE END UX_DEVICE_DISCONNECTION */
 
