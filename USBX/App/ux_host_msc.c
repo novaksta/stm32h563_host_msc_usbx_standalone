@@ -58,4 +58,70 @@
 
 /* USER CODE BEGIN 1 */
 
+#include "fx_api.h"
+#include "app_filex.h"
+
+#ifndef USBH_UsrLog
+#define USBH_UsrLog printf
+#endif
+
+#ifndef USBH_ErrLog
+#define USBH_ErrLog printf
+#endif
+
+extern FX_MEDIA                    *media;
+
+/**
+  * @brief  Function implementing msc_process_thread_entry.
+  * @param  thread_input: Not used
+  * @retval none
+  */
+void msc_process(){
+	if (media != NULL)
+	    {
+	      /* Start File operations */
+	      USBH_UsrLog("\n*** Start Files operations ***\n");
+
+	      /* Create a file and check status */
+	      if (App_File_Create(media) == UX_SUCCESS)
+	      {
+	        USBH_UsrLog("File TEST.TXT Created \n");
+
+	        /* Start write File Operation */
+	        USBH_UsrLog("Write Process ...... \n");
+
+	        /* Check status */
+	        if (App_File_Write(media) == UX_SUCCESS)
+	        {
+	          USBH_UsrLog("Write Process Success \n");
+
+	          /* Start Read File Operation and comparison operation */
+	          USBH_UsrLog("Read Process  ...... \n");
+
+	          /* Check Read Operation */
+	          if (App_File_Read(media) == UX_SUCCESS)
+	          {
+	            USBH_UsrLog("Read Process Success  \n");
+	            USBH_UsrLog("File Closed \n");
+	  			fx_media_close(media);
+		        USBH_UsrLog("Media Closed \n");
+	            USBH_UsrLog("*** End Files operations ***\n");
+	          }
+	          else
+	          {
+	            USBH_ErrLog("!! Read Process Fail !! \n");
+	          }
+	        }
+	        else
+	        {
+	          USBH_ErrLog("!! Write Process Fail !! ");
+	        }
+
+	      }
+	      else
+	      {
+	        USBH_ErrLog(" !! Could Not Create TEST.TXT File !! ");
+	      }
+	    }
+}
 /* USER CODE END 1 */

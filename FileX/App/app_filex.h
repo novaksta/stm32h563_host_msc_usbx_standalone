@@ -53,7 +53,9 @@ extern "C" {
 UINT MX_FileX_Init(void);
 
 /* USER CODE BEGIN EFP */
-
+UINT  App_File_Create(FX_MEDIA *fx_media);
+UINT  App_File_Write(FX_MEDIA *fx_media);
+UINT  App_File_Read(FX_MEDIA *fx_media);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/

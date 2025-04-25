@@ -32,7 +32,6 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -41,8 +40,8 @@ extern "C" {
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
-#define UX_HOST_APP_MEM_POOL_SIZE  1024*32
-#define USBX_HOST_MEMORY_STACK_SIZE     1024*16
+#define UX_HOST_APP_MEM_POOL_SIZE       1024*48
+#define USBX_HOST_MEMORY_STACK_SIZE     1024*24
 
 /* USER CODE BEGIN EC */
 
