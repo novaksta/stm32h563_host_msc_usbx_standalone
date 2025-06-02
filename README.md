@@ -1,7 +1,7 @@
 # Ux_Host_MSC_Standalone, step by step
 
 ## Introduction, prerequisites
-- As current (v6.14.0) CubeMX do not generate code that work off-the-shelf for Standalone USBX MSC, there is this guide
+- As current (v6.14.0) CubeMX does not generate code that works off-the-shelf for Standalone USBX MSC, there is this guide
 - NUCLEO-H563ZI is assumed as target, there is simple modification to be applied:
     - adding jumper to "USB USER" position of JP6 (as workaround) 
 - Beneficial is beginning the CubeIDE project for NUCLEO-H563ZI (as it already includes pin definition and VCP)
