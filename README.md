@@ -196,8 +196,9 @@ Beginning with `msc_process()` function, the rest of the application may be take
 ### One caveat, partition formatting
 With the example (as here presented) should work pen-drives FAT12/FAT16/FAT32 formatted (please check first, when you found issues with the example).
 
-FileX supports exFAT (licensed by Microsoft; when using FileX with stm32 mcu), this may be enabled in "fx_user.h" by uncommenting related macro
+FileX supports exFAT (license from Microsoft for such needed (https://github.com/eclipse-threadx/filex/issues/65) as not being "Azure" anymore), this may be enabled in "fx_user.h" by uncommenting related macro
 
 ```C
 #define FX_ENABLE_EXFAT
 ```
+
